@@ -1,0 +1,69 @@
+IMAGES = [
+  { tag: "7.4",  ghc: "7.4.2",  cabal: "1.16" },
+  { tag: "7.6",  ghc: "7.6.3",  cabal: "1.18" },
+  { tag: "7.8",  ghc: "7.8.4",  cabal: "1.20" },
+  { tag: "7.10", ghc: "7.10.1", cabal: "1.22" }
+]
+
+def with_images(&block)
+  IMAGES.each do |i|
+    yield i.fetch(:tag), i.fetch(:ghc), i.fetch(:cabal)
+  end
+end
+
+def template(ghc, cabal)
+return <<eos
+FROM sestrella/haskell-base
+
+ENV GHC_VERSION #{ghc}
+ENV CABAL_VERSION #{cabal}
+
+RUN apt-get update && \\
+    apt-get install -y \\
+      ghc-$GHC_VERSION \\
+      cabal-install-$CABAL_VERSION && \\
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH /opt/ghc/$GHC_VERSION/bin:$PATH
+ENV PATH /opt/cabal/$CABAL_VERSION/bin:$PATH
+
+CMD ["ghci"]
+eos
+end
+
+task :generate do
+  with_images do |tag, ghc, cabal|
+    FileUtils.mkdir_p tag
+    File.write "#{tag}/Dockerfile", template(ghc, cabal)
+  end
+end
+
+task :build do
+  sh "docker build --force-rm -t sestrella/haskell-base ."
+  with_images do |tag|
+    Dir.chdir(tag) do
+      sh "docker build --force-rm -t sestrella/haskell:#{tag} ."
+    end
+  end
+end
+
+task :versions do
+  with_images do |tag|
+    sh "docker run --rm sestrella/haskell:#{tag} ghc --version"
+    sh "docker run --rm sestrella/haskell:#{tag} cabal --version"
+  end
+end
+
+task :test do
+  with_images do |tag, ghc, cabal|
+    sh "docker run --rm sestrella/haskell:#{tag} ghc --version | grep #{ghc}"
+    sh "docker run --rm sestrella/haskell:#{tag} cabal --version | grep #{cabal}"
+  end
+end
+
+task :push do
+  sh "docker push sestrella/haskell-base"
+  with_images do |tag|
+    sh "docker push sestrella/haskell:#{tag}"
+  end
+end
