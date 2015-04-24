@@ -11,3 +11,5 @@ RUN apt-get update && \
 
 ENV PATH /opt/ghc/$GHC_VERSION/bin:$PATH
 ENV PATH /opt/cabal/$CABAL_VERSION/bin:$PATH
+
+CMD ["ghci"]
